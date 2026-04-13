@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { Suspense, useState, useEffect, useCallback, useRef } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import FeedCard from "@/components/FeedCard";
 import ShareModal from "@/components/ShareModal";
 import { detectPlatform, PLATFORMS } from "@/lib/utils";
@@ -101,17 +102,16 @@ function LiveCard({ comment, context, credit, tmpl, canvasRef }) {
 }
 
 /* ─── Feed Tab ─── */
-function FeedView() {
+function FeedView({ sort }) {
   const [cards, setCards] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [feedTab, setFeedTab] = useState("trending");
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
 
-  const fetchCards = useCallback(async (tab, pageNum = 0, append = false) => {
+  const fetchCards = useCallback(async (s, pageNum = 0, append = false) => {
     setLoading(true);
     try {
-      const res = await fetch(`/api/cards?tab=${tab}&page=${pageNum}`);
+      const res = await fetch(`/api/cards?tab=${s}&page=${pageNum}`);
       const data = await res.json();
       if (data.cards) {
         if (append) setCards(prev => [...prev, ...data.cards]);
@@ -122,58 +122,59 @@ function FeedView() {
     setLoading(false);
   }, []);
 
-  useEffect(() => { setPage(0); fetchCards(feedTab); }, [feedTab, fetchCards]);
-
-  const FEED_TABS = [
-    { label: "Trending", id: "trending" },
-    { label: "Fresh", id: "fresh" },
-    { label: "Top", id: "top" },
-  ];
+  useEffect(() => { setPage(0); fetchCards(sort); }, [sort, fetchCards]);
 
   return (
-    <>
-      <div className="max-w-[600px] mx-auto flex border-b border-gray-100">
-        {FEED_TABS.map(t => (
-          <button key={t.id} onClick={() => setFeedTab(t.id)}
-            className={`flex-1 py-2.5 text-[13px] border-b-2 transition-all ${feedTab === t.id ? "border-gray-900 text-gray-900 font-bold" : "border-transparent text-gray-300 font-medium"}`}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-      <div className="max-w-[600px] mx-auto border-x border-gray-50 min-h-[calc(100vh-160px)]">
-        {loading && cards.length === 0 && <div className="py-20 text-center text-gray-300 text-sm">Loading...</div>}
-        {cards.map(card => (
-          <FeedCard
-            key={card.id}
-            card={card}
-            onDeleted={id => setCards(prev => prev.filter(c => c.id !== id))}
-          />
-        ))}
-        {cards.length > 0 && (
-          <div className="py-10 text-center">
-            {hasMore ? (
-              <button onClick={() => { const n = page+1; setPage(n); fetchCards(feedTab, n, true); }} disabled={loading}
-                className="px-6 py-2.5 rounded-full border border-gray-200 text-[13px] text-gray-400 font-medium hover:bg-gray-50 disabled:opacity-50">
-                {loading ? "Loading..." : "Load more"}
-              </button>
-            ) : <p className="text-[13px] text-gray-200">You're all caught up</p>}
-          </div>
-        )}
-        {!loading && cards.length === 0 && (
-          <div className="py-20 text-center px-5">
-            <div className="text-3xl mb-3">💬</div>
-            <h2 className="text-lg font-bold text-gray-900 mb-2 font-serif">No komments yet</h2>
-            <p className="text-sm text-gray-400">Create a card and toggle "Post to feed" to see it here.</p>
-          </div>
-        )}
-      </div>
-    </>
+    <div className="max-w-[600px] mx-auto border-x border-gray-50 min-h-[calc(100vh-160px)]">
+      {loading && cards.length === 0 && <div className="py-20 text-center text-gray-300 text-sm">Loading...</div>}
+      {cards.map(card => (
+        <FeedCard
+          key={card.id}
+          card={card}
+          onDeleted={id => setCards(prev => prev.filter(c => c.id !== id))}
+        />
+      ))}
+      {cards.length > 0 && (
+        <div className="py-10 text-center">
+          {hasMore ? (
+            <button onClick={() => { const n = page + 1; setPage(n); fetchCards(sort, n, true); }} disabled={loading}
+              className="px-6 py-2.5 rounded-full border border-gray-200 text-[13px] text-gray-400 font-medium hover:bg-gray-50 disabled:opacity-50">
+              {loading ? "Loading..." : "Load more"}
+            </button>
+          ) : <p className="text-[13px] text-gray-200">You're all caught up</p>}
+        </div>
+      )}
+      {!loading && cards.length === 0 && (
+        <div className="py-20 text-center px-5">
+          <div className="text-3xl mb-3">💬</div>
+          <h2 className="text-lg font-bold text-gray-900 mb-2 font-serif">No komments yet</h2>
+          <p className="text-sm text-gray-400">Create a card and toggle "Post to feed" to see it here.</p>
+        </div>
+      )}
+    </div>
   );
 }
 
 /* ─── Main App ─── */
-export default function Home() {
-  const [tab, setTab] = useState("create");
+export default function Page() {
+  return (
+    <Suspense>
+      <Home />
+    </Suspense>
+  );
+}
+
+function Home() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // tab: "create" | "fresh" | "top"
+  const tab = searchParams.get("tab") || "create";
+  const setTab = (t) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", t);
+    router.push(`?${params.toString()}`, { scroll: false });
+  };
   const [comment, setComment] = useState("");
   const [context, setContext] = useState("");
   const [credit, setCredit] = useState("");
@@ -268,7 +269,11 @@ export default function Home() {
             </div>
           </div>
           <div className="flex">
-            {[{ id: "create", label: "Create" }, { id: "feed", label: "Feed" }].map(t => (
+            {[
+              { id: "create", label: "Create" },
+              { id: "fresh", label: "Fresh" },
+              { id: "top", label: "Top" },
+            ].map(t => (
               <button key={t.id} onClick={() => setTab(t.id)}
                 className={`flex-1 py-2.5 text-[15px] border-b-[2.5px] transition-all tracking-tight ${tab === t.id ? "border-gray-900 text-gray-900 font-bold" : "border-transparent text-gray-400 font-medium"}`}>
                 {t.label}
@@ -389,8 +394,8 @@ export default function Home() {
         </main>
       )}
 
-      {/* FEED TAB */}
-      {tab === "feed" && <FeedView />}
+      {/* FEED TABS */}
+      {(tab === "fresh" || tab === "top") && <FeedView sort={tab} />}
 
       {/* Share Modal */}
       {showShareModal && createdCard && (

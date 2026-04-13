@@ -28,15 +28,11 @@ export async function GET(request) {
     .eq("is_hidden", false)
     .range(offset, offset + limit - 1);
 
-  if (tab === "fresh") {
-    query = query.order("created_at", { ascending: false });
-  } else if (tab === "top") {
+  if (tab === "top") {
     query = query.order("shares", { ascending: false });
   } else {
-    // trending: order by shares desc, then created_at desc
-    query = query
-      .order("shares", { ascending: false })
-      .order("created_at", { ascending: false });
+    // fresh (default): newest first
+    query = query.order("created_at", { ascending: false });
   }
 
   const { data, error } = await query;
