@@ -244,8 +244,12 @@ function Home() {
   };
 
   const handleShare = async () => {
-    if (!hasComment || !context.trim()) {
-      showToast("Add context to create a shareable link");
+    if (!hasComment) {
+      showToast("Paste a comment first");
+      return;
+    }
+    if (!hasEmbed && !link.trim()) {
+      showToast("Add a source link or describe the post");
       return;
     }
     setSharing(true);
@@ -256,10 +260,12 @@ function Home() {
         body: JSON.stringify({
           comment_text: comment.trim(),
           credit_name: (credit.trim() || "anonymous").slice(0, 50),
-          context_desc: context.trim().slice(0, 500),
-          original_link: link.trim() || null,
+          // If link is a URL, context_desc is the user's description (context state).
+          // If link is plain text, it IS the context description.
+          context_desc: (hasEmbed ? context : link).trim().slice(0, 500),
+          original_link: hasEmbed ? link.trim() : null,
           image_url: imageUrl.trim() || null,
-          platform: detectPlatform(link),
+          platform: detectedPlatform || "other",
           post_to_feed: postToFeed,
         }),
       });
@@ -326,46 +332,50 @@ function Home() {
             </div>
           </div>
 
-          {/* Context — hidden for embeddable platforms, the embed is the context */}
-          {!hasEmbed && (
-            <div className="mb-5">
-              <textarea value={context} onChange={e => setContext(e.target.value)}
-                placeholder="What were they reacting to?"
-                rows={2} maxLength={300}
-                className="w-full px-[18px] py-3.5 rounded-xl border-[1.5px] border-gray-200 text-[15px] leading-relaxed text-gray-900 resize-none outline-none focus:border-gray-900 transition-colors box-border" />
-              <span className="text-[11px] text-gray-300 mt-1 block pl-1">Describe the post, reel, or tweet</span>
-            </div>
-          )}
-
-          {/* Credit + Link */}
-          <div className="flex gap-3 mb-1.5">
-            <input value={credit} onChange={e => setCredit(e.target.value)}
-              placeholder="@who said it" maxLength={50}
-              className="flex-1 px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[15px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border" />
-            <input value={link} onChange={e => setLink(e.target.value)}
-              placeholder="Source link (optional)"
-              className="flex-1 px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[15px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border" />
+          {/* Source — smart field: paste a URL and the embed auto-renders */}
+          <div className="mb-5">
+            <textarea
+              value={link}
+              onChange={e => {
+                const val = e.target.value;
+                setLink(val);
+                // If user types non-URL text, treat it as context description
+                if (val.trim() && !val.trim().startsWith("http")) {
+                  setContext(val);
+                }
+              }}
+              onPaste={e => {
+                // On paste, check if it looks like a URL and snap to single-line input
+                const pasted = e.clipboardData.getData("text").trim();
+                if (pasted.startsWith("http")) {
+                  e.preventDefault();
+                  setLink(pasted);
+                  setContext("");
+                }
+              }}
+              placeholder="Paste source link (Instagram, TikTok, YouTube, Reddit…) or describe the post"
+              rows={hasEmbed ? 1 : 2}
+              maxLength={500}
+              className="w-full px-[18px] py-3.5 rounded-xl border-[1.5px] border-gray-200 text-[15px] leading-relaxed text-gray-900 resize-none outline-none focus:border-gray-900 transition-colors box-border"
+            />
+            {hasEmbed ? (
+              <p className="text-[11px] mt-1 pl-1" style={{ color: plat?.color || "#888" }}>
+                {PLATFORMS[detectedPlatform]?.label} detected — embed will render in the feed
+              </p>
+            ) : (
+              <span className="text-[11px] text-gray-300 mt-1 block pl-1">
+                Paste a link to auto-embed · or describe what they were reacting to
+              </span>
+            )}
           </div>
-          {/* Instagram hint + image URL field */}
-          {link.trim() && (
-            <div className="mb-5">
-              <input
-                value={imageUrl}
-                onChange={e => setImageUrl(e.target.value)}
-                placeholder="Post image URL (optional — paste for full image quality)"
-                className="w-full px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border"
-              />
-              {detectPlatform(link) === "instagram" ? (
-                <p className="text-[11px] text-gray-400 mt-1 pl-1">
-                  Instagram: open post → right-click image → Copy Image Address. Paste above for the full meme.
-                </p>
-              ) : (
-                <p className="text-[11px] text-gray-400 mt-1 pl-1">
-                  Optional: paste the direct image URL for a richer card preview.
-                </p>
-              )}
-            </div>
-          )}
+
+          {/* Credit */}
+          <div className="mb-5">
+            <input value={credit} onChange={e => setCredit(e.target.value)}
+              placeholder="@who said it (optional)"
+              maxLength={50}
+              className="w-full px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[15px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border" />
+          </div>
 
           {/* Preview */}
           {hasComment && (
