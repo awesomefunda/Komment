@@ -303,7 +303,7 @@ export default function Home() {
           </div>
 
           {/* Credit + Link */}
-          <div className="flex gap-3 mb-6">
+          <div className="flex gap-3 mb-1.5">
             <input value={credit} onChange={e => setCredit(e.target.value)}
               placeholder="@who said it" maxLength={50}
               className="flex-1 px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[15px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border" />
@@ -311,6 +311,12 @@ export default function Home() {
               placeholder="Source link (optional)"
               className="flex-1 px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[15px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border" />
           </div>
+          {/* Instagram comment hint */}
+          {detectPlatform(link) === "instagram" && (
+            <p className="text-[11.5px] text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-2 mb-4">
+              Instagram comment links don't expose the text — paste the comment manually into the field above.
+            </p>
+          )}
 
           {/* Live preview + templates */}
           {hasComment && (

@@ -5,6 +5,19 @@ import { PLATFORMS, formatNum, timeAgo, getDeviceHash } from "@/lib/utils";
 import ReportModal from "./ReportModal";
 import ShareModal from "./ShareModal";
 
+// Strip comment_id param so OG fetch hits the base post, not just the comment anchor
+function basePostUrl(url) {
+  if (!url) return url;
+  try {
+    const u = new URL(url);
+    u.searchParams.delete("comment_id");
+    u.searchParams.delete("igsh");
+    return u.toString();
+  } catch {
+    return url;
+  }
+}
+
 export default function FeedCard({ card, onDeleted }) {
   const [shares, setShares] = useState(card.shares);
   const [shared, setShared] = useState(false);
@@ -15,6 +28,7 @@ export default function FeedCard({ card, onDeleted }) {
   const [deletionToken, setDeletionToken] = useState(null);
   const [deleting, setDeleting] = useState(false);
   const [deleted, setDeleted] = useState(false);
+  const [ogPreview, setOgPreview] = useState(null);
 
   // Load postToFeed preference and deletion token from localStorage
   useEffect(() => {
@@ -27,6 +41,16 @@ export default function FeedCard({ card, onDeleted }) {
       setDeletionToken(tokens[card.id]);
     }
   }, [card.id]);
+
+  // Fetch OG preview for original link
+  useEffect(() => {
+    if (!card.original_link) return;
+    const url = basePostUrl(card.original_link);
+    fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
+      .then(r => r.json())
+      .then(data => { if (data.image || data.title) setOgPreview(data); })
+      .catch(() => {});
+  }, [card.original_link]);
 
   const plat = PLATFORMS[card.platform] || PLATFORMS.other;
   const initial = (card.credit_name || "?")[0].toUpperCase();
@@ -144,25 +168,41 @@ export default function FeedCard({ card, onDeleted }) {
             </p>
 
             {/* Context card */}
-            <div className="border border-gray-200 rounded-[14px] overflow-hidden mb-3.5">
-              <div className="bg-gray-50 px-4 py-3.5 min-h-[48px]">
+            <a
+              href={card.original_link || undefined}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`block border border-gray-200 rounded-[14px] overflow-hidden mb-3.5 no-underline transition-colors ${card.original_link ? "hover:border-gray-300 hover:bg-gray-50/50" : ""}`}
+              onClick={e => !card.original_link && e.preventDefault()}
+            >
+              {/* OG image */}
+              {ogPreview?.image && (
+                <div className="w-full aspect-video bg-gray-100 overflow-hidden">
+                  <img
+                    src={ogPreview.image}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    onError={e => { e.target.style.display = "none"; }}
+                  />
+                </div>
+              )}
+
+              {/* Context text */}
+              <div className="px-4 py-3.5">
                 <p className="text-[13.5px] text-gray-500 leading-relaxed italic m-0">
                   {card.context_desc}
                 </p>
               </div>
+
+              {/* Source row */}
               {card.original_link && (
-                <a
-                  href={card.original_link}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-200 bg-white no-underline hover:bg-gray-50 transition-colors"
-                >
+                <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-100">
                   <svg
-                    width="12"
-                    height="12"
+                    width="11"
+                    height="11"
                     viewBox="0 0 24 24"
                     fill="none"
-                    stroke="#aaa"
+                    stroke="#bbb"
                     strokeWidth="2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -171,15 +211,15 @@ export default function FeedCard({ card, onDeleted }) {
                     <polyline points="15 3 21 3 21 9" />
                     <line x1="10" y1="14" x2="21" y2="3" />
                   </svg>
-                  <span className="text-[12.5px] text-gray-400 flex-1">
-                    {domain}
+                  <span className="text-[12px] text-gray-400 flex-1 truncate">
+                    {ogPreview?.title ? ogPreview.title.slice(0, 60) + (ogPreview.title.length > 60 ? "…" : "") : domain}
                   </span>
-                  <span className="text-[12.5px] text-blue-500 font-medium">
+                  <span className="text-[12px] text-blue-400 font-medium shrink-0">
                     View original
                   </span>
-                </a>
+                </div>
               )}
-            </div>
+            </a>
 
             {/* Footer */}
             <div className="flex items-center justify-between">
