@@ -359,7 +359,7 @@ function Home() {
               className="w-full px-[18px] py-3.5 rounded-xl border-[1.5px] border-gray-200 text-[15px] leading-relaxed text-gray-900 resize-none outline-none focus:border-gray-900 transition-colors box-border"
             />
             {hasEmbed ? (
-              <p className="text-[11px] mt-1 pl-1" style={{ color: plat?.color || "#888" }}>
+              <p className="text-[11px] mt-1 pl-1" style={{ color: PLATFORMS[detectedPlatform]?.color || "#888" }}>
                 {PLATFORMS[detectedPlatform]?.label} detected — embed will render in the feed
               </p>
             ) : (
