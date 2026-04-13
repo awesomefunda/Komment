@@ -5,21 +5,28 @@ import { PLATFORMS, formatNum, timeAgo, getDeviceHash } from "@/lib/utils";
 import ReportModal from "./ReportModal";
 import ShareModal from "./ShareModal";
 
-export default function FeedCard({ card }) {
+export default function FeedCard({ card, onDeleted }) {
   const [shares, setShares] = useState(card.shares);
   const [shared, setShared] = useState(false);
   const [showReport, setShowReport] = useState(false);
   const [showShare, setShowShare] = useState(false);
   const [reported, setReported] = useState(false);
   const [postToFeed, setPostToFeed] = useState(true);
+  const [deletionToken, setDeletionToken] = useState(null);
+  const [deleting, setDeleting] = useState(false);
+  const [deleted, setDeleted] = useState(false);
 
-  // Load postToFeed preference from localStorage
+  // Load postToFeed preference and deletion token from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("komment_postToFeed");
     if (saved !== null) {
       setPostToFeed(JSON.parse(saved));
     }
-  }, []);
+    const tokens = JSON.parse(localStorage.getItem("komment_tokens") || "{}");
+    if (tokens[card.id]) {
+      setDeletionToken(tokens[card.id]);
+    }
+  }, [card.id]);
 
   const plat = PLATFORMS[card.platform] || PLATFORMS.other;
   const initial = (card.credit_name || "?")[0].toUpperCase();
@@ -65,6 +72,27 @@ export default function FeedCard({ card }) {
     }).catch(() => {});
   };
 
+  const handleDelete = async () => {
+    if (!deletionToken || deleting) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/cards/${card.id}`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ deletion_token: deletionToken }),
+      });
+      if (res.ok) {
+        setDeleted(true);
+        // Remove token from localStorage
+        const tokens = JSON.parse(localStorage.getItem("komment_tokens") || "{}");
+        delete tokens[card.id];
+        localStorage.setItem("komment_tokens", JSON.stringify(tokens));
+        onDeleted?.(card.id);
+      }
+    } catch {}
+    setDeleting(false);
+  };
+
   const domain = card.original_link
     ? card.original_link.replace(/https?:\/\/(www\.)?/, "").split("/")[0]
     : null;
@@ -73,7 +101,7 @@ export default function FeedCard({ card }) {
     <>
       <article
         className={`border-b border-gray-100 px-5 py-[18px] transition-opacity ${
-          reported ? "opacity-30" : ""
+          reported || deleted ? "opacity-30 pointer-events-none" : ""
         }`}
       >
         <div className="flex gap-3">
@@ -164,6 +192,28 @@ export default function FeedCard({ card }) {
                 </span>
               </div>
               <div className="flex items-center gap-1.5">
+                {/* Delete (only shown if this browser created the card) */}
+                {deletionToken && (
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleting || deleted}
+                    title="Delete your card"
+                    className="p-1.5 text-gray-300 hover:text-red-500 transition-colors disabled:opacity-40"
+                  >
+                    {deleting ? (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+                        <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+                      </svg>
+                    ) : (
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                        <path d="M10 11v6M14 11v6"/>
+                        <path d="M9 6V4h6v2"/>
+                      </svg>
+                    )}
+                  </button>
+                )}
                 {/* Report */}
                 <button
                   onClick={() => !reported && setShowReport(true)}

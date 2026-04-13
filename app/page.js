@@ -142,7 +142,13 @@ function FeedView() {
       </div>
       <div className="max-w-[600px] mx-auto border-x border-gray-50 min-h-[calc(100vh-160px)]">
         {loading && cards.length === 0 && <div className="py-20 text-center text-gray-300 text-sm">Loading...</div>}
-        {cards.map(card => <FeedCard key={card.id} card={card} />)}
+        {cards.map(card => (
+          <FeedCard
+            key={card.id}
+            card={card}
+            onDeleted={id => setCards(prev => prev.filter(c => c.id !== id))}
+          />
+        ))}
         {cards.length > 0 && (
           <div className="py-10 text-center">
             {hasMore ? (
