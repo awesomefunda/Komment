@@ -5,7 +5,55 @@ import { PLATFORMS, formatNum, timeAgo, getDeviceHash } from "@/lib/utils";
 import ReportModal from "./ReportModal";
 import ShareModal from "./ShareModal";
 
-// Strip comment_id param so OG fetch hits the base post, not just the comment anchor
+// ─── Platform embed helpers ───────────────────────────────────────────────────
+
+function getInstagramPostId(url) {
+  if (!url) return null;
+  const m = url.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+function getTikTokVideoId(url) {
+  if (!url) return null;
+  const m = url.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
+  return m ? m[1] : null;
+}
+
+function getYouTubeVideoId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]+)/);
+  return m ? m[1] : null;
+}
+
+function getTwitterTweetId(url) {
+  if (!url) return null;
+  const m = url.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
+  return m ? m[1] : null;
+}
+
+// Returns embed config or null if no embed is available for this URL
+function getEmbed(platform, url) {
+  if (!url) return null;
+  if (platform === "instagram") {
+    const id = getInstagramPostId(url);
+    if (id) return { type: "iframe", src: `https://www.instagram.com/p/${id}/embed/captioned/`, height: 560 };
+  }
+  if (platform === "tiktok") {
+    const id = getTikTokVideoId(url);
+    if (id) return { type: "iframe", src: `https://www.tiktok.com/embed/v2/${id}`, height: 740 };
+  }
+  if (platform === "youtube") {
+    const id = getYouTubeVideoId(url);
+    if (id) return { type: "iframe", src: `https://www.youtube.com/embed/${id}`, height: 315 };
+  }
+  if (platform === "x") {
+    const id = getTwitterTweetId(url);
+    if (id) return { type: "twitter", tweetId: id };
+  }
+  return null;
+}
+
+// Strip comment_id so OG fetch hits the base post
 function basePostUrl(url) {
   if (!url) return url;
   try {
@@ -13,9 +61,7 @@ function basePostUrl(url) {
     u.searchParams.delete("comment_id");
     u.searchParams.delete("igsh");
     return u.toString();
-  } catch {
-    return url;
-  }
+  } catch { return url; }
 }
 
 export default function FeedCard({ card, onDeleted }) {
@@ -42,20 +88,22 @@ export default function FeedCard({ card, onDeleted }) {
     }
   }, [card.id]);
 
-  // If card already has a stored screenshot, use it directly.
-  // Otherwise fall back to lazy OG fetch (works for Reddit, YouTube etc.)
+  // Use stored screenshot if available.
+  // Skip OG fetch for platforms that have native embeds (Instagram, TikTok, YouTube, X).
   useEffect(() => {
     if (card.screenshot_url) {
       setOgPreview({ image: card.screenshot_url, title: null });
       return;
     }
+    const embedPlatforms = ["instagram", "tiktok", "youtube", "x"];
+    if (embedPlatforms.includes(card.platform)) return; // embed handles it
     if (!card.original_link) return;
     const url = basePostUrl(card.original_link);
     fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
       .then(r => r.json())
       .then(data => { if (data.image || data.title) setOgPreview(data); })
       .catch(() => {});
-  }, [card.original_link, card.screenshot_url]);
+  }, [card.original_link, card.screenshot_url, card.platform]);
 
   const plat = PLATFORMS[card.platform] || PLATFORMS.other;
   const initial = (card.credit_name || "?")[0].toUpperCase();
@@ -173,58 +221,82 @@ export default function FeedCard({ card, onDeleted }) {
             </p>
 
             {/* Context card */}
-            <a
-              href={card.original_link || undefined}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={`block border border-gray-200 rounded-[14px] overflow-hidden mb-3.5 no-underline transition-colors ${card.original_link ? "hover:border-gray-300 hover:bg-gray-50/50" : ""}`}
-              onClick={e => !card.original_link && e.preventDefault()}
-            >
-              {/* OG image — full natural dimensions, no crop */}
-              {ogPreview?.image && (
-                <div className="w-full bg-gray-100 overflow-hidden">
-                  <img
-                    src={ogPreview.image}
-                    alt=""
-                    className="w-full h-auto block"
-                    onError={e => { e.target.parentElement.style.display = "none"; }}
-                  />
-                </div>
-              )}
+            {(() => {
+              const embed = getEmbed(card.platform, card.original_link);
 
-              {/* Context text */}
-              <div className="px-4 py-3.5">
-                <p className="text-[13.5px] text-gray-500 leading-relaxed italic m-0">
-                  {card.context_desc}
-                </p>
-              </div>
+              if (embed) {
+                // Native platform embed — shows the full post
+                return (
+                  <div className="border border-gray-200 rounded-[14px] overflow-hidden mb-3.5">
+                    {/* Context label */}
+                    <div className="px-4 pt-3 pb-2">
+                      <p className="text-[12.5px] text-gray-400 leading-relaxed italic m-0">
+                        {card.context_desc}
+                      </p>
+                    </div>
+                    {/* Platform embed */}
+                    <div className="w-full">
+                      <iframe
+                        src={embed.src}
+                        width="100%"
+                        height={embed.height}
+                        style={{ border: "none", display: "block" }}
+                        allowFullScreen
+                        loading="lazy"
+                        title="Original post"
+                      />
+                    </div>
+                    {/* View original link */}
+                    <a
+                      href={card.original_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-100 no-underline hover:bg-gray-50 transition-colors"
+                    >
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                      <span className="text-[12px] text-gray-400 flex-1">{domain}</span>
+                      <span className="text-[12px] text-blue-400 font-medium">View original</span>
+                    </a>
+                  </div>
+                );
+              }
 
-              {/* Source row */}
-              {card.original_link && (
-                <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-100">
-                  <svg
-                    width="11"
-                    height="11"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="#bbb"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                    <polyline points="15 3 21 3 21 9" />
-                    <line x1="10" y1="14" x2="21" y2="3" />
-                  </svg>
-                  <span className="text-[12px] text-gray-400 flex-1 truncate">
-                    {ogPreview?.title ? ogPreview.title.slice(0, 60) + (ogPreview.title.length > 60 ? "…" : "") : domain}
-                  </span>
-                  <span className="text-[12px] text-blue-400 font-medium shrink-0">
-                    View original
-                  </span>
-                </div>
-              )}
-            </a>
+              // Fallback: OG image or plain context text
+              return (
+                <a
+                  href={card.original_link || undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className={`block border border-gray-200 rounded-[14px] overflow-hidden mb-3.5 no-underline transition-colors ${card.original_link ? "hover:border-gray-300" : ""}`}
+                  onClick={e => !card.original_link && e.preventDefault()}
+                >
+                  {ogPreview?.image && (
+                    <div className="w-full bg-gray-100">
+                      <img src={ogPreview.image} alt="" className="w-full h-auto block"
+                        onError={e => { e.target.parentElement.style.display = "none"; }} />
+                    </div>
+                  )}
+                  <div className="px-4 py-3.5">
+                    <p className="text-[13.5px] text-gray-500 leading-relaxed italic m-0">{card.context_desc}</p>
+                  </div>
+                  {card.original_link && (
+                    <div className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-100">
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                        <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                      <span className="text-[12px] text-gray-400 flex-1 truncate">
+                        {ogPreview?.title ? ogPreview.title.slice(0, 60) : domain}
+                      </span>
+                      <span className="text-[12px] text-blue-400 font-medium shrink-0">View original</span>
+                    </div>
+                  )}
+                </a>
+              );
+            })()}
 
             {/* Footer */}
             <div className="flex items-center justify-between">
