@@ -47,7 +47,9 @@ export async function POST(request) {
 
     if (!comment_text || comment_text.trim().length === 0)
       return NextResponse.json({ error: "Comment is required" }, { status: 400 });
-    if (!context_desc || context_desc.trim().length === 0)
+    const EMBED_PLATFORMS = ["instagram", "tiktok", "youtube", "x"];
+    const needsContext = !EMBED_PLATFORMS.includes(platform) || !original_link?.trim();
+    if (needsContext && (!context_desc || context_desc.trim().length === 0))
       return NextResponse.json({ error: "Context is required" }, { status: 400 });
     if (comment_text.length > 500)
       return NextResponse.json({ error: "Comment too long (max 500 chars)" }, { status: 400 });

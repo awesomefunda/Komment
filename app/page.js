@@ -199,6 +199,32 @@ function Home() {
 
   const tmpl = TEMPLATES.find(t => t.id === templateId);
   const hasComment = comment.trim().length > 0;
+  const detectedPlatform = detectPlatform(link);
+  const EMBED_PLATFORMS = ["instagram", "tiktok", "youtube", "x"];
+  const hasEmbed = EMBED_PLATFORMS.includes(detectedPlatform) && link.trim();
+
+  // Extract embed src for preview (mirrors FeedCard logic)
+  const embedPreviewSrc = (() => {
+    if (!hasEmbed) return null;
+    const l = link.trim();
+    if (detectedPlatform === "instagram") {
+      const m = l.match(/instagram\.com\/(?:p|reel|tv)\/([A-Za-z0-9_-]+)/);
+      if (m) return { src: `https://www.instagram.com/p/${m[1]}/embed/captioned/`, height: 560 };
+    }
+    if (detectedPlatform === "tiktok") {
+      const m = l.match(/tiktok\.com\/@[^/]+\/video\/(\d+)/);
+      if (m) return { src: `https://www.tiktok.com/embed/v2/${m[1]}`, height: 740 };
+    }
+    if (detectedPlatform === "youtube") {
+      const m = l.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([A-Za-z0-9_-]+)/);
+      if (m) return { src: `https://www.youtube.com/embed/${m[1]}`, height: 315 };
+    }
+    if (detectedPlatform === "x") {
+      const m = l.match(/(?:twitter\.com|x\.com)\/\w+\/status\/(\d+)/);
+      if (m) return { src: `https://platform.twitter.com/embed/Tweet.html?id=${m[1]}`, height: 280 };
+    }
+    return null;
+  })();
 
   const showToast = msg => { setToast(msg); setTimeout(() => setToast(null), 2500); };
 
@@ -300,14 +326,16 @@ function Home() {
             </div>
           </div>
 
-          {/* Context */}
-          <div className="mb-5">
-            <textarea value={context} onChange={e => setContext(e.target.value)}
-              placeholder="What were they reacting to?"
-              rows={2} maxLength={300}
-              className="w-full px-[18px] py-3.5 rounded-xl border-[1.5px] border-gray-200 text-[15px] leading-relaxed text-gray-900 resize-none outline-none focus:border-gray-900 transition-colors box-border" />
-            <span className="text-[11px] text-gray-300 mt-1 block pl-1">Describe the post, reel, or tweet</span>
-          </div>
+          {/* Context — hidden for embeddable platforms, the embed is the context */}
+          {!hasEmbed && (
+            <div className="mb-5">
+              <textarea value={context} onChange={e => setContext(e.target.value)}
+                placeholder="What were they reacting to?"
+                rows={2} maxLength={300}
+                className="w-full px-[18px] py-3.5 rounded-xl border-[1.5px] border-gray-200 text-[15px] leading-relaxed text-gray-900 resize-none outline-none focus:border-gray-900 transition-colors box-border" />
+              <span className="text-[11px] text-gray-300 mt-1 block pl-1">Describe the post, reel, or tweet</span>
+            </div>
+          )}
 
           {/* Credit + Link */}
           <div className="flex gap-3 mb-1.5">
@@ -339,28 +367,51 @@ function Home() {
             </div>
           )}
 
-          {/* Live preview + templates */}
+          {/* Preview */}
           {hasComment && (
             <div className="mb-6 animate-fade-in-up">
-              <div className="flex items-center justify-between mb-2.5 px-0.5">
-                <span className="text-[13px] font-semibold text-gray-400">Live preview</span>
-                <div className="flex gap-1.5">
-                  {TEMPLATES.map(t => (
-                    <button key={t.id} onClick={() => setTemplateId(t.id)} title={t.label}
-                      className="transition-all"
-                      style={{
-                        width: 28, height: 28, borderRadius: 8,
-                        border: templateId === t.id ? "2.5px solid #1a1a1a" : "1.5px solid #e5e5e5",
-                        background: t.bg, cursor: "pointer",
-                        transform: templateId === t.id ? "scale(1.12)" : "scale(1)",
-                        boxShadow: templateId === t.id ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
-                      }} />
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-2xl overflow-hidden border border-gray-200" style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
-                <LiveCard comment={comment} context={context} credit={credit} tmpl={tmpl} canvasRef={canvasRef} />
-              </div>
+              {embedPreviewSrc ? (
+                // Show the actual embed — what the feed card will look like
+                <>
+                  <span className="text-[13px] font-semibold text-gray-400 block mb-2.5 px-0.5">
+                    Feed preview
+                  </span>
+                  <div className="rounded-2xl overflow-hidden border border-gray-200">
+                    <iframe
+                      src={embedPreviewSrc.src}
+                      width="100%"
+                      height={embedPreviewSrc.height}
+                      style={{ border: "none", display: "block" }}
+                      allowFullScreen
+                      loading="lazy"
+                      title="Post preview"
+                    />
+                  </div>
+                </>
+              ) : (
+                // Canvas card preview for non-embed platforms
+                <>
+                  <div className="flex items-center justify-between mb-2.5 px-0.5">
+                    <span className="text-[13px] font-semibold text-gray-400">Card preview</span>
+                    <div className="flex gap-1.5">
+                      {TEMPLATES.map(t => (
+                        <button key={t.id} onClick={() => setTemplateId(t.id)} title={t.label}
+                          className="transition-all"
+                          style={{
+                            width: 28, height: 28, borderRadius: 8,
+                            border: templateId === t.id ? "2.5px solid #1a1a1a" : "1.5px solid #e5e5e5",
+                            background: t.bg, cursor: "pointer",
+                            transform: templateId === t.id ? "scale(1.12)" : "scale(1)",
+                            boxShadow: templateId === t.id ? "0 2px 8px rgba(0,0,0,0.1)" : "none",
+                          }} />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="rounded-2xl overflow-hidden border border-gray-200" style={{ boxShadow: "0 4px 20px rgba(0,0,0,0.05)" }}>
+                    <LiveCard comment={comment} context={context} credit={credit} tmpl={tmpl} canvasRef={canvasRef} />
+                  </div>
+                </>
+              )}
             </div>
           )}
 

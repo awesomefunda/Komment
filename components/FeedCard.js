@@ -225,41 +225,18 @@ export default function FeedCard({ card, onDeleted }) {
               const embed = getEmbed(card.platform, card.original_link);
 
               if (embed) {
-                // Native platform embed — shows the full post
+                // The embed IS the context — no redundant text or "view original"
                 return (
-                  <div className="border border-gray-200 rounded-[14px] overflow-hidden mb-3.5">
-                    {/* Context label */}
-                    <div className="px-4 pt-3 pb-2">
-                      <p className="text-[12.5px] text-gray-400 leading-relaxed italic m-0">
-                        {card.context_desc}
-                      </p>
-                    </div>
-                    {/* Platform embed */}
-                    <div className="w-full">
-                      <iframe
-                        src={embed.src}
-                        width="100%"
-                        height={embed.height}
-                        style={{ border: "none", display: "block" }}
-                        allowFullScreen
-                        loading="lazy"
-                        title="Original post"
-                      />
-                    </div>
-                    {/* View original link */}
-                    <a
-                      href={card.original_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-100 no-underline hover:bg-gray-50 transition-colors"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#bbb" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-                        <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
-                      </svg>
-                      <span className="text-[12px] text-gray-400 flex-1">{domain}</span>
-                      <span className="text-[12px] text-blue-400 font-medium">View original</span>
-                    </a>
+                  <div className="rounded-[14px] overflow-hidden mb-3.5 border border-gray-200">
+                    <iframe
+                      src={embed.src}
+                      width="100%"
+                      height={embed.height}
+                      style={{ border: "none", display: "block" }}
+                      allowFullScreen
+                      loading="lazy"
+                      title="Original post"
+                    />
                   </div>
                 );
               }
