@@ -175,14 +175,14 @@ export default function FeedCard({ card, onDeleted }) {
               className={`block border border-gray-200 rounded-[14px] overflow-hidden mb-3.5 no-underline transition-colors ${card.original_link ? "hover:border-gray-300 hover:bg-gray-50/50" : ""}`}
               onClick={e => !card.original_link && e.preventDefault()}
             >
-              {/* OG image */}
+              {/* OG image — full natural dimensions, no crop */}
               {ogPreview?.image && (
-                <div className="w-full aspect-video bg-gray-100 overflow-hidden">
+                <div className="w-full bg-gray-100 overflow-hidden">
                   <img
                     src={ogPreview.image}
                     alt=""
-                    className="w-full h-full object-cover"
-                    onError={e => { e.target.style.display = "none"; }}
+                    className="w-full h-auto block"
+                    onError={e => { e.target.parentElement.style.display = "none"; }}
                   />
                 </div>
               )}
