@@ -42,15 +42,20 @@ export default function FeedCard({ card, onDeleted }) {
     }
   }, [card.id]);
 
-  // Fetch OG preview for original link
+  // If card already has a stored screenshot, use it directly.
+  // Otherwise fall back to lazy OG fetch (works for Reddit, YouTube etc.)
   useEffect(() => {
+    if (card.screenshot_url) {
+      setOgPreview({ image: card.screenshot_url, title: null });
+      return;
+    }
     if (!card.original_link) return;
     const url = basePostUrl(card.original_link);
     fetch(`/api/og-preview?url=${encodeURIComponent(url)}`)
       .then(r => r.json())
       .then(data => { if (data.image || data.title) setOgPreview(data); })
       .catch(() => {});
-  }, [card.original_link]);
+  }, [card.original_link, card.screenshot_url]);
 
   const plat = PLATFORMS[card.platform] || PLATFORMS.other;
   const initial = (card.credit_name || "?")[0].toUpperCase();

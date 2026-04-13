@@ -68,36 +68,15 @@ async function tryMicrolink(url) {
     const json = await res.json();
     if (json.status !== "success" || !json.data) return null;
     const d = json.data;
-    const imageUrl = d.image?.url || d.logo?.url || null;
     return {
       title: d.title || null,
       description: d.description || null,
-      image: removeInstagramCrop(imageUrl),
+      image: d.image?.url || d.logo?.url || null,
       site_name: d.publisher || null,
       url: d.url || url,
     };
   } catch {
     return null;
-  }
-}
-
-// Instagram CDN URLs include a crop parameter like c270.0.810.810a_ in the stp
-// query string that squares off the image from the top, cutting off bottom content.
-// Stripping it makes the CDN return the full uncropped image.
-function removeInstagramCrop(url) {
-  if (!url) return url;
-  if (!url.includes("cdninstagram.com") && !url.includes("fbcdn.net")) return url;
-  try {
-    const u = new URL(url);
-    const stp = u.searchParams.get("stp");
-    if (stp) {
-      // Remove leading crop segment: c[x].[y].[w].[h]a_
-      const cleaned = stp.replace(/^c[\d.]+a_/, "");
-      u.searchParams.set("stp", cleaned);
-    }
-    return u.toString();
-  } catch {
-    return url;
   }
 }
 
