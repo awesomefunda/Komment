@@ -1,0 +1,233 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { PLATFORMS, formatNum, timeAgo, getDeviceHash } from "@/lib/utils";
+import ReportModal from "./ReportModal";
+import ShareModal from "./ShareModal";
+
+export default function FeedCard({ card }) {
+  const [shares, setShares] = useState(card.shares);
+  const [shared, setShared] = useState(false);
+  const [showReport, setShowReport] = useState(false);
+  const [showShare, setShowShare] = useState(false);
+  const [reported, setReported] = useState(false);
+  const [postToFeed, setPostToFeed] = useState(true);
+
+  // Load postToFeed preference from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem("komment_postToFeed");
+    if (saved !== null) {
+      setPostToFeed(JSON.parse(saved));
+    }
+  }, []);
+
+  const plat = PLATFORMS[card.platform] || PLATFORMS.other;
+  const initial = (card.credit_name || "?")[0].toUpperCase();
+
+  const handleShare = async () => {
+    // Show share modal
+    setShowShare(true);
+
+    // Post to feed if enabled (ensures card is in feed)
+    if (postToFeed) {
+      fetch("/api/cards", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          comment_text: card.comment_text,
+          credit_name: card.credit_name,
+          context_desc: card.context_desc,
+          original_link: card.original_link,
+          platform: card.platform,
+        }),
+      }).catch(() => {});
+    }
+
+    // Log share action to API
+    setShared(true);
+    setShares((s) => s + 1);
+    fetch(`/api/cards/${card.id}/share`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ device_hash: getDeviceHash() }),
+    }).catch(() => {});
+
+    setTimeout(() => setShared(false), 2000);
+  };
+
+  const handleReport = async (reason) => {
+    setReported(true);
+    setShowReport(false);
+    fetch(`/api/cards/${card.id}/report`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ reason, device_hash: getDeviceHash() }),
+    }).catch(() => {});
+  };
+
+  const domain = card.original_link
+    ? card.original_link.replace(/https?:\/\/(www\.)?/, "").split("/")[0]
+    : null;
+
+  return (
+    <>
+      <article
+        className={`border-b border-gray-100 px-5 py-[18px] transition-opacity ${
+          reported ? "opacity-30" : ""
+        }`}
+      >
+        <div className="flex gap-3">
+          {/* Avatar */}
+          <div
+            className="w-[38px] h-[38px] rounded-full flex items-center justify-center text-[15px] font-bold shrink-0"
+            style={{
+              background: plat.color + "15",
+              border: `1.5px solid ${plat.color}30`,
+              color: plat.color,
+            }}
+          >
+            {initial}
+          </div>
+
+          <div className="flex-1 min-w-0">
+            {/* Meta row */}
+            <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
+              <span className="font-bold text-[14.5px] text-gray-900">
+                {card.credit_name}
+              </span>
+              <span className="text-gray-300 text-[13px]">·</span>
+              <span className="text-gray-400 text-[13px]">
+                {timeAgo(card.created_at)}
+              </span>
+              <span
+                className="text-[10.5px] font-semibold uppercase tracking-wide px-[7px] py-[2px] rounded-full"
+                style={{
+                  color: plat.color,
+                  background: plat.color + "0D",
+                }}
+              >
+                {plat.label}
+              </span>
+            </div>
+
+            {/* THE COMMENT */}
+            <p className="text-[18px] leading-[1.55] text-gray-900 font-normal mb-3.5 break-words font-serif tracking-tight">
+              {card.comment_text}
+            </p>
+
+            {/* Context card */}
+            <div className="border border-gray-200 rounded-[14px] overflow-hidden mb-3.5">
+              <div className="bg-gray-50 px-4 py-3.5 min-h-[48px]">
+                <p className="text-[13.5px] text-gray-500 leading-relaxed italic m-0">
+                  {card.context_desc}
+                </p>
+              </div>
+              {card.original_link && (
+                <a
+                  href={card.original_link}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1.5 px-4 py-2.5 border-t border-gray-200 bg-white no-underline hover:bg-gray-50 transition-colors"
+                >
+                  <svg
+                    width="12"
+                    height="12"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#aaa"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                    <polyline points="15 3 21 3 21 9" />
+                    <line x1="10" y1="14" x2="21" y2="3" />
+                  </svg>
+                  <span className="text-[12.5px] text-gray-400 flex-1">
+                    {domain}
+                  </span>
+                  <span className="text-[12.5px] text-blue-500 font-medium">
+                    View original
+                  </span>
+                </a>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3.5">
+                <span className="text-[12.5px] text-gray-300">
+                  {formatNum(card.views)} views
+                </span>
+                <span className="text-[12.5px] text-gray-300">
+                  {formatNum(shares)} shares
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                {/* Report */}
+                <button
+                  onClick={() => !reported && setShowReport(true)}
+                  className="p-1.5 text-gray-300 hover:text-red-400 transition-colors"
+                  disabled={reported}
+                >
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z" />
+                    <line x1="4" y1="22" x2="4" y2="15" />
+                  </svg>
+                </button>
+                {/* Share */}
+                <button
+                  onClick={handleShare}
+                  className={`flex items-center gap-1.5 text-[13px] font-semibold px-4 py-[7px] rounded-full border transition-all ${
+                    shared
+                      ? "bg-green-50 border-green-200 text-green-600"
+                      : "bg-white border-gray-200 text-gray-900 hover:bg-gray-50"
+                  }`}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+                    <polyline points="16 6 12 2 8 6" />
+                    <line x1="12" y1="2" x2="12" y2="15" />
+                  </svg>
+                  {shared ? "Copied!" : "Share"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      {showReport && (
+        <ReportModal
+          onClose={() => setShowReport(false)}
+          onReport={handleReport}
+        />
+      )}
+
+      {showShare && (
+        <ShareModal
+          card={card}
+          onClose={() => setShowShare(false)}
+        />
+      )}
+    </>
+  );
+}

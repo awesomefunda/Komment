@@ -1,0 +1,7 @@
+node_modules/
+.next/
+.env.local
+.env
+*.log
+komment_seed.json
+.vercel
