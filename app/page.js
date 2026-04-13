@@ -179,6 +179,7 @@ function Home() {
   const [context, setContext] = useState("");
   const [credit, setCredit] = useState("");
   const [link, setLink] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
   const [templateId, setTemplateId] = useState("clean");
   const [postToFeed, setPostToFeed] = useState(true);
   const [saved, setSaved] = useState(false);
@@ -231,6 +232,7 @@ function Home() {
           credit_name: (credit.trim() || "anonymous").slice(0, 50),
           context_desc: context.trim().slice(0, 500),
           original_link: link.trim() || null,
+          image_url: imageUrl.trim() || null,
           platform: detectPlatform(link),
           post_to_feed: postToFeed,
         }),
@@ -316,11 +318,25 @@ function Home() {
               placeholder="Source link (optional)"
               className="flex-1 px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[15px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border" />
           </div>
-          {/* Instagram comment hint */}
-          {detectPlatform(link) === "instagram" && (
-            <p className="text-[11.5px] text-amber-600 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-2 mb-4">
-              Instagram comment links don't expose the text — paste the comment manually into the field above.
-            </p>
+          {/* Instagram hint + image URL field */}
+          {link.trim() && (
+            <div className="mb-5">
+              <input
+                value={imageUrl}
+                onChange={e => setImageUrl(e.target.value)}
+                placeholder="Post image URL (optional — paste for full image quality)"
+                className="w-full px-[18px] py-3 rounded-xl border-[1.5px] border-gray-200 text-[14px] text-gray-900 outline-none focus:border-gray-900 transition-colors box-border"
+              />
+              {detectPlatform(link) === "instagram" ? (
+                <p className="text-[11px] text-gray-400 mt-1 pl-1">
+                  Instagram: open post → right-click image → Copy Image Address. Paste above for the full meme.
+                </p>
+              ) : (
+                <p className="text-[11px] text-gray-400 mt-1 pl-1">
+                  Optional: paste the direct image URL for a richer card preview.
+                </p>
+              )}
+            </div>
           )}
 
           {/* Live preview + templates */}

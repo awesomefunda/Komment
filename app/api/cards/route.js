@@ -43,7 +43,7 @@ export async function GET(request) {
 export async function POST(request) {
   try {
     const body = await request.json();
-    const { comment_text, credit_name, context_desc, original_link, platform, vibe, post_to_feed } = body;
+    const { comment_text, credit_name, context_desc, original_link, image_url, platform, vibe, post_to_feed } = body;
 
     if (!comment_text || comment_text.trim().length === 0)
       return NextResponse.json({ error: "Comment is required" }, { status: 400 });
@@ -80,21 +80,28 @@ export async function POST(request) {
 
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-    // Fetch and permanently store the post image in Supabase Storage
+    // Fetch and permanently store the post image in Supabase Storage.
+    // Priority: user-supplied image_url > auto-fetched via Microlink
     const card = { ...data };
-    if (original_link?.trim()) {
-      try {
-        const screenshotUrl = await fetchAndStoreImage(original_link.trim(), short_code);
-        if (screenshotUrl) {
-          await getAdminClient()
-            .from("cards")
-            .update({ screenshot_url: screenshotUrl })
-            .eq("id", card.id);
-          card.screenshot_url = screenshotUrl;
-        }
-      } catch {
-        // Image storage failed — card still created, image will be fetched lazily
+    const imageSource = image_url?.trim() || (original_link?.trim() ? null : null);
+    try {
+      let screenshotUrl = null;
+      if (image_url?.trim()) {
+        // User pasted a direct image URL — download and store it as-is
+        screenshotUrl = await downloadAndStore(image_url.trim(), short_code);
+      } else if (original_link?.trim()) {
+        // Auto-fetch via Microlink
+        screenshotUrl = await fetchAndStoreImage(original_link.trim(), short_code);
       }
+      if (screenshotUrl) {
+        await getAdminClient()
+          .from("cards")
+          .update({ screenshot_url: screenshotUrl })
+          .eq("id", card.id);
+        card.screenshot_url = screenshotUrl;
+      }
+    } catch {
+      // Image storage failed — card still created, image fetched lazily in feed
     }
 
     return NextResponse.json({ card }, { status: 201 });
@@ -104,6 +111,29 @@ export async function POST(request) {
 }
 
 // ─── Image fetch + Supabase Storage ──────────────────────────────────────────
+
+// Download a direct image URL and store it in Supabase Storage
+async function downloadAndStore(imageUrl, short_code) {
+  const imgRes = await fetch(imageUrl, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+      Referer: "https://www.instagram.com/",
+    },
+    signal: AbortSignal.timeout(10000),
+  });
+  if (!imgRes.ok) return null;
+
+  const contentType = imgRes.headers.get("content-type") || "image/jpeg";
+  const ext = contentType.includes("png") ? "png" : contentType.includes("webp") ? "webp" : "jpg";
+  const buffer = Buffer.from(await imgRes.arrayBuffer());
+
+  const admin = getAdminClient();
+  await admin.storage.createBucket("card-images", { public: true }).catch(() => {});
+  const filePath = `${short_code}.${ext}`;
+  const { error } = await admin.storage.from("card-images").upload(filePath, buffer, { contentType, upsert: true });
+  if (error) return null;
+  return admin.storage.from("card-images").getPublicUrl(filePath).data.publicUrl;
+}
 
 async function fetchAndStoreImage(pageUrl, short_code) {
   // Get the image URL via Microlink (handles Instagram, Reddit, Twitter)
